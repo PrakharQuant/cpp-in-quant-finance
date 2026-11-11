@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>C++ in Quant Finance: From Python Prototype to Fast Pricing Engine</title>
+  <meta name="description" content="Educational guide on where C++ is useful in quantitative finance, how it complements Python, with runnable Monte Carlo and order-book examples.">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header>
+    <nav>
+      <a href="#top" class="logo">C++ in Quant Finance</a>
+      <ul class="nav-links">
+        <li><a href="#why">Why C++</a></li>
+        <li><a href="#where">Where It Appears</a></li>
+        <li><a href="#workflow">Python + C++</a></li>
+        <li><a href="#tradeoffs">Trade-offs</a></li>
+        <li><a href="#examples">Examples</a></li>
+        <li><a href="#decision">Decision Guide</a></li>
+        <li><a href="#glossary">Glossary</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main id="top">
+    <h1>C++ in Quant Finance: From Python Prototype to Fast Pricing Engine</h1>
+    <p class="lead">A practical, beginner-friendly look at where C++ earns its place in quantitative finance, what it can do more efficiently or predictably than Python, and how the two languages are commonly used together.</p>
+
+    <div class="toc">
+      <strong>Contents</strong>
+      <ul>
+        <li><a href="#why">C++ vs Python</a></li>
+        <li><a href="#where">Where C++ appears in quant finance</a></li>
+        <li><a href="#workflow">The Python + C++ workflow</a></li>
+        <li><a href="#tradeoffs">Trade-offs and when C++ is unnecessary</a></li>
+        <li><a href="#benchmark">Benchmark caveats</a></li>
+        <li><a href="#examples">Runnable code examples</a></li>
+        <li><a href="#decision">Which language should I use?</a></li>
+        <li><a href="#glossary">Glossary</a></li>
+      </ul>
+    </div>
+
+    <section id="why">
+      <h2>1. C++ vs Python</h2>
+      <p>Python can express the same core pricing and risk algorithms that C++ can. You can write a Monte Carlo simulator, a finite-difference PDE solver, or an order-book aggregator in pure Python. The difference is usually not capability but cost: runtime overhead, memory behavior, and how predictable the performance is under load.</p>
+      <p>C++ gives you:</p>
+      <ul>
+        <li>Lower runtime overhead for tight numerical loops (no interpreter, optional manual memory layout).</li>
+        <li>Direct control over memory allocation, cache locality, and data structures.</li>
+        <li>More predictable latency when you avoid dynamic allocation and virtual calls in hot paths.</li>
+      </ul>
+      <p>Python’s strengths remain rapid prototyping, excellent libraries (NumPy, SciPy, pandas, QuantLib-Python), and easy orchestration of data pipelines. Many of those libraries already call highly optimized native code under the hood. The practical question is rarely “can Python do it?” but “is the current pure-Python or high-level version fast enough and predictable enough for this workload?”</p>
+    </section>
+
+    <section id="where">
+      <h2>2. Where C++ appears in quant finance</h2>
+      <ul>
+        <li><strong>Pricing libraries</strong> — production implementations of models (Black-Scholes, local vol, stochastic vol, hybrids) that are called millions of times per day.</li>
+        <li><strong>Monte Carlo simulation</strong> — path generation and payoff evaluation for exotic options, XVA, or risk when the number of paths or path length makes pure-Python loops expensive.</li>
+        <li><strong>Risk calculations</strong> — VaR, sensitivities, scenario generation on large portfolios.</li>
+        <li><strong>Market-data processing</strong> — parsing, normalizing, and aggregating high-volume feeds or order-book snapshots.</li>
+        <li><strong>Latency-sensitive trading systems</strong> — matching engines, smart order routers, and market-making components where microseconds matter and garbage-collection pauses are unacceptable.</li>
+      </ul>
+      <p>In many firms the research desk works in Python (or R, Julia, MATLAB) while the production pricing or trading library is written in C++ (or Rust, Java, etc.) with a thin Python binding for research use.</p>
+    </section>
+
+    <section id="workflow">
+      <h2>3. The Python + C++ workflow</h2>
+      <p>A common pattern is:</p>
+      <ol>
+        <li>Prototype the idea, explore parameters, and validate against analytics or market data in Python.</li>
+        <li>Profile the code. Identify the measured bottleneck (often a pure-Python loop over paths or instruments).</li>
+        <li>Rewrite only that hot section in C++ (or use an existing optimized library), keeping the surrounding research and orchestration in Python.</li>
+        <li>Expose the C++ function via a binding (pybind11, Cython, or a simple command-line tool) so Python notebooks and scripts can call it.</li>
+      </ol>
+      <p>Remember that NumPy, pandas, and SciPy already contain large amounts of optimized native code. Moving a vectorized NumPy operation into hand-written C++ rarely helps; the win usually comes from replacing an interpreted loop that cannot be easily vectorized, or from gaining tighter control over memory and latency.</p>
+    </section>
+
+    <section id="tradeoffs">
+      <h2>4. Trade-offs</h2>
+      <ul>
+        <li><strong>Development speed</strong> — Python is dramatically faster to write and iterate on for research.</li>
+        <li><strong>Complexity</strong> — C++ has a steeper learning curve, longer compile times, and more ways to introduce undefined behavior.</li>
+        <li><strong>Memory safety</strong> — modern C++ (smart pointers, RAII, bounds-checked containers) is safer than classic C, but still requires discipline. Python’s garbage collector removes an entire class of bugs.</li>
+        <li><strong>Debugging and tooling</strong> — Python’s interactive nature and excellent debuggers make exploration easier; C++ debugging is more involved.</li>
+        <li><strong>Deployment</strong> — a pure-Python script is trivial to ship; a C++ binary or extension module needs a build system and platform considerations.</li>
+      </ul>
+      <div class="note">
+        <strong>When C++ is unnecessary:</strong> exploratory research, one-off reports, model validation against closed-form formulas, data cleaning, or any workload that finishes in seconds on a laptop and does not need deterministic low latency. If NumPy already solves it, stay in Python.
+      </div>
+    </section>
+
+    <section id="benchmark">
+      <h2>5. Benchmark caveats</h2>
+      <div class="warning">
+        <p>A toy Monte Carlo comparison on a laptop does <em>not</em> prove that a production trading system should be written in C++. It only illustrates relative cost of equivalent numerical work.</p>
+      </div>
+      <ul>
+        <li>Compare the same algorithm, same inputs, and same seed where possible. RNG implementations differ; exact prices will not match.</li>
+        <li>Measure only the simulation (or hot loop). Compilation time is a one-time cost and should be excluded from the timing.</li>
+        <li>Warm-up effects, CPU frequency scaling, and background processes affect results. Run multiple times.</li>
+        <li>Results depend on hardware, compiler flags (<code>-O3</code>, architecture), Python version, and whether the C++ binary was built with the same optimization level.</li>
+        <li>A pure-Python loop is the slowest common baseline. Vectorized NumPy is usually much closer to C++. The largest gains appear when the pure-Python loop cannot be vectorized or when you need tighter latency control.</li>
+      </ul>
+      <p>Run the examples yourself; do not treat any number printed on this page as authoritative.</p>
+    </section>
+
+    <section id="examples">
+      <h2>6. Runnable code examples</h2>
+      <p>All source files live in the repository under <code>cpp/</code> and <code>python/</code>. Build and run instructions are in the <a href="https://github.com/PrakharQuant/cpp-in-quant-finance">README</a>.</p>
+
+      <h3>C++: European call Monte Carlo</h3>
+      <p>Standard C++17 only. Fixed seed, command-line path count, reports estimate and elapsed simulation time. Invalid arguments are rejected cleanly.</p>
+      <pre><code>#include &lt;iostream&gt;
+#include &lt;random&gt;
+#include &lt;cmath&gt;
+#include &lt;chrono&gt;
+// ... (see cpp/monte_carlo_call.cpp for the full file)
+// S_T = S0 * exp((r - 0.5*sigma^2)*T + sigma*sqrt(T)*Z)
+// estimate = exp(-r*T) * average(max(S_T - K, 0))
+</code></pre>
+
+      <h3>Python: equivalent pure-Python version</h3>
+      <p>Same model parameters and seed. Exact numeric agreement is not guaranteed.</p>
+      <pre><code>import random, math, time
+random.seed(42)
+# pure-Python loop using random.gauss
+# see python/monte_carlo_call.py
+</code></pre>
+      <p>An optional NumPy vectorized version is provided separately in <code>python/monte_carlo_call_numpy.py</code>.</p>
+
+      <h3>C++: simple order-book aggregation</h3>
+      <p>Teaching example that aggregates quantity by price level and reports best bid/ask from a small set of orders. Not a production matching engine.</p>
+      <pre><code>// Aggregate bids and asks with std::map
+// Find best bid (highest price) and best ask (lowest price)
+// see cpp/order_book.cpp
+</code></pre>
+
+      <h3>Python calling C++</h3>
+      <p>The simplest zero-dependency approach is to call the compiled binary via <code>subprocess</code>. A minimal script is in <code>python/call_cpp.py</code>. For in-process calls with richer type conversion, pybind11 is the usual next step; it requires an extra dependency and a slightly more involved build.</p>
+      <div class="note">
+        The added integration complexity is worthwhile when the C++ function is called frequently from a Python research loop or production service and the overhead of process startup becomes noticeable, or when you need to pass large arrays without serialization.
+      </div>
+    </section>
+
+    <section id="decision">
+      <h2>7. Which language should I use?</h2>
+      <div class="decision-box">
+        <ul>
+          <li><strong>Stay in Python</strong> if you are exploring ideas, the code runs in acceptable time, or NumPy/SciPy already solve the numerical part.</li>
+          <li><strong>Profile first</strong> before rewriting anything. Measure, do not guess.</li>
+          <li><strong>Move a measured bottleneck to C++</strong> when a pure-Python loop dominates runtime, when you need tighter control over latency or memory, or when the same function will be called from a latency-sensitive service.</li>
+          <li><strong>Keep the research surface in Python</strong> — notebooks, parameter sweeps, reporting, and orchestration stay in Python; only the hot kernel moves.</li>
+          <li><strong>Prefer existing libraries</strong> (QuantLib, Eigen, specialized pricing libraries) over hand-rolling complex models unless you have a clear reason.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="glossary">
+      <h2>8. Glossary</h2>
+      <dl class="glossary">
+        <dt>Latency</dt>
+        <dd>The time delay between a request (or market event) and the corresponding response. Critical in trading systems; less critical in overnight risk runs.</dd>
+        <dt>Throughput</dt>
+        <dd>How much work (paths, orders, instruments) can be processed per unit time. Often more relevant for batch pricing and risk.</dd>
+        <dt>Monte Carlo</dt>
+        <dd>A numerical method that estimates an expectation by averaging many random samples. Common for pricing path-dependent options.</dd>
+        <dt>Native code</dt>
+        <dd>Machine code produced by a compiler (C, C++, Rust, Fortran, etc.) as opposed to code interpreted by a virtual machine or interpreter.</dd>
+        <dt>Binding</dt>
+        <dd>A thin layer (e.g. pybind11, Cython, ctypes) that lets one language call functions written in another. Allows Python to call C++ without rewriting the research layer.</dd>
+        <dt>Geometric Brownian motion</dt>
+        <dd>The continuous-time stochastic process commonly used to model asset prices in the Black-Scholes framework.</dd>
+      </dl>
+    </section>
+
+    <p style="margin-top: 3rem; font-size: 0.95rem; color: var(--muted);">
+      All examples are educational. Compile and run them locally to see real timings on your hardware.
+    </p>
+  </main>
+
+  <footer>
+    <p>
+      Created by Prakhar Gupta<br>
+      <a href="mailto:bestofprakhar@gmail.com">bestofprakhar@gmail.com</a> ·
+      <a href="https://www.linkedin.com/in/prakhar-gupta-5b7250372" target="_blank" rel="noopener">LinkedIn</a> ·
+      <a href="https://x.com/PrakharQuant" target="_blank" rel="noopener">X / Twitter</a> ·
+      <a href="https://github.com/PrakharQuant" target="_blank" rel="noopener">GitHub</a>
+    </p>
+    <p style="margin-top: 0.5rem;">Educational material — no investment advice.</p>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
